@@ -16,6 +16,27 @@ typedef std::set<func_t, more_func> sorted_func_list_t;
 func_list_t g_func_list;
 func_names_t g_func_names;
 
+struct bbl_key_t
+{
+	ADDRINT bbl_addr;
+	USIZE bbl_size;
+};
+
+struct bbl_val_t
+{
+	unsigned long counter;	// #times this BBL was executed
+	string rtn_name;
+	INT32 rtn_id;	// this is just for runtime, for performance
+				// because on each jump, the invoked BBL has
+				// to check if last instruction (from global
+				// variable) was from the same RTN
+	ADDRINT target_nt;	// target if branch is not taken.
+					// fill this value in instrumentation time
+	unsigned long counter_nt;
+	ADDRINT target_t;	// target if branch is taken. Fill this only AFTER branch was taken
+	unsigned long counter_t;
+};
+
 VOID CountBbl(UINT32 numInstInBbl, unsigned int *counter)
 {
 	*counter += numInstInBbl;
