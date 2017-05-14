@@ -13,8 +13,8 @@ typedef std::map<INT32, unsigned int> func_list_t;
 typedef std::map<INT32,std::string> func_names_t;
 typedef std::set<func_t, more_func> sorted_func_list_t;
 
-func_list_t func_list;
-func_names_t func_names;
+func_list_t g_func_list;
+func_names_t g_func_names;
 
 VOID CountBbl(UINT32 numInstInBbl, unsigned int *counter)
 {
@@ -29,14 +29,14 @@ VOID Trace(TRACE trace, VOID *v)
 		if (!RTN_Valid(rtn)) continue;
 
 		INT32 id = RTN_Id(rtn);
-		std::string &temp = func_names[id];
+		std::string &temp = g_func_names[id];
 		if (temp.empty()) temp = RTN_Name(rtn);
 		
 		BBL_InsertCall(bbl,
 			IPOINT_ANYWHERE,
 			(AFUNPTR)CountBbl,
 			IARG_UINT32, BBL_NumIns(bbl),
-			IARG_PTR, &func_list[id],
+			IARG_PTR, &g_func_list[id],
 			IARG_END);
 	}
 }
@@ -47,11 +47,11 @@ VOID Fini(INT32 code, VOID *v)
 
 	sorted_func_list_t sorted_func_list;
 
-	for (func_list_t::const_iterator i = func_list.begin(); i != func_list.end(); ++i)
+	for (func_list_t::const_iterator i = g_func_list.begin(); i != g_func_list.end(); ++i)
 		sorted_func_list.insert(*i);
 
 	for (sorted_func_list_t::const_iterator i = sorted_func_list.begin(); i != sorted_func_list.end(); ++i)
-		file << func_names[i->first] << " icount: " << i->second << std::endl;
+		file << g_func_names[i->first] << " icount: " << i->second << std::endl;
 }
 
 int main(int argc, char *argv[])
