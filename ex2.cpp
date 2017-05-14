@@ -32,8 +32,9 @@ struct bbl_val_t
 				// because on each jump, the invoked BBL has
 				// to check if last instruction (from global
 				// variable) was from the same RTN
-	/* const */ ADDRINT target_nt;	// target if branch is not taken.
+	/* const */ ADDRINT target_nt_addr;	// target if branch is not taken.
 					// fill this value in instrumentation time
+	bbl_val_t* target_nt;	// target if branch is NOT taken. Fill this only AFTER branch was taken
 	unsigned long counter_nt;
 	bbl_val_t* target_t;	// target if branch is taken. Fill this only AFTER branch was taken
 	unsigned long counter_t;
@@ -52,7 +53,8 @@ VOID CountBbl(struct bbl_val_t* bbl_val_ptr)
 		goto out;
 	if(bbl_val_ptr->rtn_id != g_last_bbl_val_ptr->rtn_id)
 		goto out;	// the last bbl was a different function than the current bbl
-	if(bbl_val_ptr->first_ins == g_last_bbl_val_ptr->target_nt) {
+	if(bbl_val_ptr->first_ins == g_last_bbl_val_ptr->target_nt_addr) {
+		g_last_bbl_val_ptr->target_nt = bbl_val_ptr;
 		(g_last_bbl_val_ptr->counter_nt) ++;
 		goto out;
 	}
@@ -87,7 +89,7 @@ VOID Trace(TRACE trace, VOID *v)
 			bbl_val.rtn_id = RTN_Id(rtn);
 			bbl_val.rtn_name = RTN_Name(rtn);
 			bbl_val.rtn_addr = RTN_Address(rtn);
-			bbl_val.target_nt = bbl_val.last_ins + INS_Size(last_ins);
+			bbl_val.target_nt_addr = bbl_val.last_ins + INS_Size(last_ins);
 			bbl_val.counter_nt = 0;
 			bbl_val.counter_t = 0;
 			it = g_bbl_map.insert(g_bbl_map.begin(), make_pair(bbl_key, bbl_val));
@@ -158,8 +160,17 @@ VOID Fini(INT32 code, VOID *v)
 		print_it->second.printing_bbl_list.push_back(&(it->second));
 		// TODO: make sure I don't print edges with count 0
 		printing_edge_t edge_nt, edge_t;
+
 		edge_nt.edge_from = &(it->second);
+		edge_nt.edge_to = it->second.target_nt;
+		edge_nt.edge_count = it->second.counter_nt;
+
 		edge_t.edge_from = &(it->second);
+		edge_t.edge_to = it->second.target_t;
+		edge_t.edge_count = it->second.counter_t;
+
+		print_it->second.printing_edges.push_back(edge_nt);
+		print_it->second.printing_edges.push_back(edge_t);
 	}
 
 	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) { // TODO: this is not sorted by the counter
