@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#rm  obj-intel64/hw1.so
+rm  obj-intel64/ex2.so
 mkdir obj-intel64
 #rm rtn-output.txt
 make obj-intel64/ex2.so

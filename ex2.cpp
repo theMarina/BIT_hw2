@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <map>
+#include <iostream> // TODO: delete this line
 
 typedef std::pair<UINT32, unsigned int> func_t;
 struct more_func{ bool operator() (const func_t& x, const func_t& y)
@@ -25,6 +26,7 @@ struct bbl_val_t
 	/* const */ ADDRINT first_ins;
 	/* const */ ADDRINT last_ins;
 	/* const */ string rtn_name;
+	/* const */ ADDRINT rtn_addr;
 	/* const */ INT32 rtn_id;	// this is just for runtime, for performance
 				// because on each jump, the invoked BBL has
 				// to check if last instruction (from global
@@ -32,7 +34,7 @@ struct bbl_val_t
 	/* const */ ADDRINT target_nt;	// target if branch is not taken.
 					// fill this value in instrumentation time
 	unsigned long counter_nt;
-	ADDRINT target_t;	// target if branch is taken. Fill this only AFTER branch was taken
+	bbl_val_t* target_t;	// target if branch is taken. Fill this only AFTER branch was taken
 	unsigned long counter_t;
 };
 
@@ -51,7 +53,7 @@ VOID CountBbl(struct bbl_val_t* bbl_val_ptr)
 		(g_last_bbl_val_ptr->counter_nt) ++;
 		goto out;
 	}
-	g_last_bbl_val_ptr->target_t = bbl_val_ptr->first_ins;
+	g_last_bbl_val_ptr->target_t = bbl_val_ptr;
 	(g_last_bbl_val_ptr->counter_t) ++;
 out:
 	g_last_bbl_val_ptr = bbl_val_ptr;
@@ -81,6 +83,7 @@ VOID Trace(TRACE trace, VOID *v)
 			bbl_val.last_ins = INS_Address(last_ins);
 			bbl_val.rtn_id = RTN_Id(rtn);
 			bbl_val.rtn_name = RTN_Name(rtn);
+			bbl_val.rtn_addr = RTN_Address(rtn);
 			bbl_val.target_nt = bbl_val.last_ins + INS_Size(last_ins);
 			bbl_val.counter_nt = 0;
 			bbl_val.counter_t = 0;
@@ -99,31 +102,24 @@ VOID Trace(TRACE trace, VOID *v)
 }
 
 struct printing_edge_t {
-	ADDRINT edge_begin;
-	ADDRINT edge_end;
+	bbl_val_t* edge_from;	//  using bbl_val_t* as a unique bbl identifier
+	bbl_val_t* edge_to;	//  using bbl_val_t* as a unique bbl identifier
 	unsigned long edge_count;
 };
 
 bool operator<(const printing_edge_t& n1, const printing_edge_t& n2)
 {
-	if(n1.edge_begin < n2.edge_begin) return true;
-	return n1.edge_end < n2.edge_end;
+	if(n1.edge_count < n2.edge_count) return true;
+	if(n1.edge_from < n2.edge_from) return true;
+	return n1.edge_to < n2.edge_to;
 };
-
-struct printing_bbl_t {
-	ADDRINT bbl_addr;
-	std::vector<printing_edge_t> printing_edge_list;
-};
-
-bool operator<(const printing_bbl_t& n1, const printing_bbl_t& n2)
-{
-        return n1.bbl_addr < n2.bbl_addr;
-}
 
 struct printing_rtn_t {
 	unsigned long counter;	//counter*bbl_size
 	string rtn_name;
-	std::vector<printing_bbl_t> printing_bbl_list;
+	ADDRINT rtn_addr;
+	std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
+	std::vector<printing_edge_t> printing_edges; // TODO: use this
 };
 
 bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
@@ -137,9 +133,28 @@ VOID Fini(INT32 code, VOID *v)
 {
 	std::ofstream file("rtn-output.txt");
 
- // RTN_id -><sigma(counter*bbl_size) , vector<BBL_addr, vector<edge_begin,edge_end, count>>>
+	std::map<INT32, printing_rtn_t> printing_ds;	// RTN_id to printing_rtn_t
 
-	std::map<ADDRINT, printing_rtn_t> printing_ds;
+	for(std::map<bbl_key_t, bbl_val_t>::iterator it = g_bbl_map.begin() ; it != g_bbl_map.end() ; ++it) {
+		std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.find(it->second.rtn_id);
+		if(print_it == printing_ds.end()) {
+			printing_rtn_t printing_rtn;
+			printing_rtn.counter = 0;
+			printing_rtn.rtn_name = it->second.rtn_name;
+			printing_rtn.rtn_addr = it->second.rtn_addr;
+			print_it = printing_ds.insert(printing_ds.begin(), make_pair(it->second.rtn_id, printing_rtn));
+		}
+		print_it->second.counter += (it->first.second) * (it->second.counter);
+		print_it->second.printing_bbl_list.push_back(&(it->second));
+	}
+
+	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) { // TODO: this is not sorted by the counter
+		file << (print_it->second.rtn_name) << " at 0x" << std::hex << (print_it->second.rtn_addr)  << std::dec << " : icount: " << (print_it->second.counter) << std::endl;
+		int i = 0;
+		for(std::vector<bbl_val_t*>::iterator rtn_it = print_it->second.printing_bbl_list.begin() ; rtn_it != print_it->second.printing_bbl_list.end() ; ++rtn_it) {
+			file << "BB" << i << ": 0x" << std::hex << (*rtn_it)->first_ins << " - 0x" << (*rtn_it)->last_ins << std::dec << std::endl;
+		}
+	}
 /*
 	sorted_func_list_t sorted_func_list;
 
