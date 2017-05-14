@@ -5,6 +5,7 @@
 #include <set>
 #include <map>
 #include <iostream> // TODO: delete this line
+#include <algorithm>
 
 typedef std::pair<UINT32, unsigned int> func_t;
 struct more_func{ bool operator() (const func_t& x, const func_t& y)
@@ -36,6 +37,8 @@ struct bbl_val_t
 	unsigned long counter_nt;
 	bbl_val_t* target_t;	// target if branch is taken. Fill this only AFTER branch was taken
 	unsigned long counter_t;
+
+	int idx_for_printing;	// used only for printing
 };
 
 struct bbl_val_t* g_last_bbl_val_ptr = NULL;	// this is the last BBL that was executeda
@@ -122,6 +125,13 @@ struct printing_rtn_t {
 	std::vector<printing_edge_t> printing_edges; // TODO: use this
 };
 
+struct aaa{
+	bool operator()(bbl_val_t* a, bbl_val_t* b) const {   
+		if(a->first_ins < b->first_ins) return true;
+		return (a->last_ins < b->last_ins);
+        }   
+} cmp_bbl_val_t_ptr;
+
 bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
 {
         if (n1.counter < n2.counter) return true;
@@ -146,13 +156,19 @@ VOID Fini(INT32 code, VOID *v)
 		}
 		print_it->second.counter += (it->first.second) * (it->second.counter);
 		print_it->second.printing_bbl_list.push_back(&(it->second));
+		// TODO: make sure I don't print edges with count 0
+		printing_edge_t edge_nt, edge_t;
+		edge_nt.edge_from = &(it->second);
+		edge_t.edge_from = &(it->second);
 	}
 
 	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) { // TODO: this is not sorted by the counter
 		file << (print_it->second.rtn_name) << " at 0x" << std::hex << (print_it->second.rtn_addr)  << std::dec << " : icount: " << (print_it->second.counter) << std::endl;
+		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
 		int i = 0;
 		for(std::vector<bbl_val_t*>::iterator rtn_it = print_it->second.printing_bbl_list.begin() ; rtn_it != print_it->second.printing_bbl_list.end() ; ++rtn_it) {
 			file << "BB" << i << ": 0x" << std::hex << (*rtn_it)->first_ins << " - 0x" << (*rtn_it)->last_ins << std::dec << std::endl;
+			(*rtn_it)->idx_for_printing = i;
 		}
 	}
 /*
