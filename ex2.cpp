@@ -98,13 +98,49 @@ VOID Trace(TRACE trace, VOID *v)
 	}
 }
 
+struct printing_edge_t {
+	ADDRINT edge_begin;
+	ADDRINT edge_end;
+	unsigned long edge_count;
+};
+
+bool operator<(const printing_edge_t& n1, const printing_edge_t& n2)
+{
+	if(n1.edge_begin < n2.edge_begin) return true;
+	return n1.edge_end < n2.edge_end;
+};
+
+struct printing_bbl_t {
+	ADDRINT bbl_addr;
+	std::vector<printing_edge_t> printing_edge_list;
+};
+
+bool operator<(const printing_bbl_t& n1, const printing_bbl_t& n2)
+{
+        return n1.bbl_addr < n2.bbl_addr;
+}
+
+struct printing_rtn_t {
+	unsigned long counter;	//counter*bbl_size
+	string rtn_name;
+	std::vector<printing_bbl_t> printing_bbl_list;
+};
+
+bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
+{
+        if (n1.counter < n2.counter) return true;
+	return n1.rtn_name < n2.rtn_name;
+}
+
+
 VOID Fini(INT32 code, VOID *v)
 {
 	std::ofstream file("rtn-output.txt");
 
-//	std::map<ADDRINT	// RTN_id -> sigma(counter*bbl_size)
-				// RTN_id -> list<>
+ // RTN_id -><sigma(counter*bbl_size) , vector<BBL_addr, vector<edge_begin,edge_end, count>>>
 
+	std::map<ADDRINT, printing_rtn_t> printing_ds;
+/*
 	sorted_func_list_t sorted_func_list;
 
 	for (func_list_t::const_iterator i = g_func_list.begin(); i != g_func_list.end(); ++i)
@@ -112,6 +148,7 @@ VOID Fini(INT32 code, VOID *v)
 
 	for (sorted_func_list_t::const_iterator i = sorted_func_list.begin(); i != sorted_func_list.end(); ++i)
 		file << g_func_names[i->first] << " icount: " << i->second << std::endl;
+*/
 }
 
 int main(int argc, char *argv[])
