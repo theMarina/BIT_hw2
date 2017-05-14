@@ -90,7 +90,9 @@ VOID Trace(TRACE trace, VOID *v)
 			bbl_val.rtn_name = RTN_Name(rtn);
 			bbl_val.rtn_addr = RTN_Address(rtn);
 			bbl_val.target_nt_addr = bbl_val.last_ins + INS_Size(last_ins);
+			bbl_val.target_nt = NULL;
 			bbl_val.counter_nt = 0;
+			bbl_val.target_t = NULL;
 			bbl_val.counter_t = 0;
 			it = g_bbl_map.insert(g_bbl_map.begin(), make_pair(bbl_key, bbl_val));
 		}
@@ -112,12 +114,13 @@ struct printing_edge_t {
 	unsigned long edge_count;
 };
 
-bool operator<(const printing_edge_t& n1, const printing_edge_t& n2)
-{
-	if(n1.edge_count < n2.edge_count) return true;
-	if(n1.edge_from < n2.edge_from) return true;
-	return n1.edge_to < n2.edge_to;
-};
+struct aaaa{
+	bool operator()(const printing_edge_t& n1, const printing_edge_t& n2) {
+		if(n1.edge_count < n2.edge_count) return true;
+		if(n1.edge_from->idx_for_printing < n2.edge_from->idx_for_printing) return true;
+		return n1.edge_to->idx_for_printing < n2.edge_to->idx_for_printing;
+	}
+}print_edges_cmp;
 
 struct printing_rtn_t {
 	unsigned long counter;	//counter*bbl_size
@@ -169,8 +172,10 @@ VOID Fini(INT32 code, VOID *v)
 		edge_t.edge_to = it->second.target_t;
 		edge_t.edge_count = it->second.counter_t;
 
-		print_it->second.printing_edges.push_back(edge_nt);
-		print_it->second.printing_edges.push_back(edge_t);
+		if(edge_nt.edge_from && edge_nt.edge_to && edge_nt.edge_count)
+			print_it->second.printing_edges.push_back(edge_nt);
+		if(edge_t.edge_from && edge_t.edge_to && edge_t.edge_count)
+			print_it->second.printing_edges.push_back(edge_t);
 	}
 
 	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) { // TODO: this is not sorted by the counter
@@ -178,19 +183,17 @@ VOID Fini(INT32 code, VOID *v)
 		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
 		int i = 0;
 		for(std::vector<bbl_val_t*>::iterator rtn_it = print_it->second.printing_bbl_list.begin() ; rtn_it != print_it->second.printing_bbl_list.end() ; ++rtn_it) {
-			file << "BB" << i << ": 0x" << std::hex << (*rtn_it)->first_ins << " - 0x" << (*rtn_it)->last_ins << std::dec << std::endl;
+			file << "\tBB" << i << ": 0x" << std::hex << (*rtn_it)->first_ins << " - 0x" << (*rtn_it)->last_ins << std::dec << std::endl;
 			(*rtn_it)->idx_for_printing = i;
+			i++;
+		}
+//		std::sort(print_it->second.printing_edges.begin(), print_it->second.printing_edges.end(), print_edges_cmp);	// TODO: when I uncomment this line, I get a semnentation fault
+		i = 0;
+		for(std::vector<printing_edge_t>::iterator edge_it = print_it->second.printing_edges.begin() ; edge_it != print_it->second.printing_edges.end() ; ++edge_it) {
+			file << "\t\tEdge" << i << ": BB" << edge_it->edge_from->idx_for_printing << " --> BB" << edge_it->edge_to->idx_for_printing << "\t" << edge_it->edge_count << std::endl;
+			i++;
 		}
 	}
-/*
-	sorted_func_list_t sorted_func_list;
-
-	for (func_list_t::const_iterator i = g_func_list.begin(); i != g_func_list.end(); ++i)
-		sorted_func_list.insert(*i);
-
-	for (sorted_func_list_t::const_iterator i = sorted_func_list.begin(); i != sorted_func_list.end(); ++i)
-		file << g_func_names[i->first] << " icount: " << i->second << std::endl;
-*/
 }
 
 int main(int argc, char *argv[])
