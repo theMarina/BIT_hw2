@@ -23,6 +23,7 @@ struct bbl_val_t
 {
 	unsigned long counter;	// #times this BBL was executed
 	/* const */ ADDRINT first_ins;
+	/* const */ ADDRINT last_ins;
 	/* const */ string rtn_name;
 	/* const */ INT32 rtn_id;	// this is just for runtime, for performance
 				// because on each jump, the invoked BBL has
@@ -71,14 +72,16 @@ VOID Trace(TRACE trace, VOID *v)
 		if(it == g_bbl_map.end()) {	// creating a new entry in the map
 			struct bbl_val_t bbl_val;
 			INS first_ins = BBL_InsHead(bbl);
+			INS last_ins = BBL_InsTail(bbl);
 			RTN rtn = INS_Rtn(first_ins);
 			if (!RTN_Valid(rtn)) continue;
 
 			bbl_val.counter = 0;
 			bbl_val.first_ins = INS_Address(first_ins);
+			bbl_val.last_ins = INS_Address(last_ins);
 			bbl_val.rtn_id = RTN_Id(rtn);
 			bbl_val.rtn_name = RTN_Name(rtn);
-			bbl_val.target_nt = INS_Address(BBL_InsTail(bbl)) + INS_Size(BBL_InsTail(bbl)); // TODO:reduce InsTail calls
+			bbl_val.target_nt = bbl_val.last_ins + INS_Size(last_ins);
 			bbl_val.counter_nt = 0;
 			bbl_val.counter_t = 0;
 			it = g_bbl_map.insert(g_bbl_map.begin(), make_pair(bbl_key, bbl_val));
@@ -98,6 +101,9 @@ VOID Trace(TRACE trace, VOID *v)
 VOID Fini(INT32 code, VOID *v)
 {
 	std::ofstream file("rtn-output.txt");
+
+//	std::map<ADDRINT	// RTN_id -> sigma(counter*bbl_size)
+				// RTN_id -> list<>
 
 	sorted_func_list_t sorted_func_list;
 
