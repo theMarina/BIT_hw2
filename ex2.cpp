@@ -19,20 +19,22 @@ typedef std::set<func_t, more_func> sorted_func_list_t;
 func_list_t g_func_list;
 func_names_t g_func_names;
 
-
 typedef ADDRINT bbl_key_t;
 struct bbl_val_t
 {
 	unsigned long counter;	// #times this BBL was executed
 	/* const */ ADDRINT first_ins;
 	/* const */ ADDRINT last_ins;
-	/* const */ string rtn_name;
+	/* const */ std::string rtn_name;
 	/* const */ ADDRINT rtn_addr;
 	/* const */ INT32 rtn_id;	// this is just for runtime, for performance
 				// because on each jump, the invoked BBL has
 				// to check if last instruction (from global
 				// variable) was from the same RTN
 	/* const */ UINT32 size;
+
+	/* const */ std::string img_name;
+	/* const */ ADDRINT img_addr;
 
 	ADDRINT target[2]; // taken/not taken
 	unsigned int target_count[2];
@@ -72,9 +74,11 @@ VOID Trace(TRACE trace, VOID *v)
 
 		INS first_ins = BBL_InsHead(bbl);
 		INS last_ins = BBL_InsTail(bbl);
-		
+
 		RTN rtn = INS_Rtn(first_ins);
 		if (!RTN_Valid(rtn)) continue;
+
+		IMG img = IMG_FindByAddress(bbl_key);
 
 		std::map<bbl_key_t, bbl_val_t>::iterator it = g_bbl_map.find(bbl_key);
 		if(it == g_bbl_map.end()) {	// creating a new entry in the map
@@ -87,6 +91,8 @@ VOID Trace(TRACE trace, VOID *v)
 			bbl_val.rtn_id = RTN_Id(rtn);
 			bbl_val.rtn_name = RTN_Name(rtn);
 			bbl_val.rtn_addr = RTN_Address(rtn);
+			bbl_val.img_name = IMG_Name(img);
+			bbl_val.img_addr = IMG_LowAddress(img);
 			bbl_val.target[0] = bbl_val.target[1] = 0;
 			bbl_val.target_count[0] = bbl_val.target_count[1] = 0;
 
@@ -163,6 +169,7 @@ struct printing_rtn_t {
 	unsigned long counter;	//counter*bbl_size
 	string rtn_name;
 	ADDRINT rtn_addr;
+	ADDRINT img_addr;
 	std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
 	std::vector<printing_edge_t> printing_edges; // TODO: use this
 };
@@ -194,6 +201,7 @@ VOID Fini(INT32 code, VOID *v)
 			printing_rtn.counter = 0;
 			printing_rtn.rtn_name = it->second.rtn_name;
 			printing_rtn.rtn_addr = it->second.rtn_addr;
+			printing_rtn.img_addr = it->second.img_addr;
 			print_it = printing_ds.insert(printing_ds.begin(), make_pair(it->second.rtn_id, printing_rtn));
 		}
 		print_it->second.counter += (it->second.size * it->second.counter);
@@ -222,15 +230,24 @@ VOID Fini(INT32 code, VOID *v)
 		}
 	}
 
-	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) { // TODO: this is not sorted by the counter
-		file << (print_it->second.rtn_name) << " at 0x" << std::hex << (print_it->second.rtn_addr)  << std::dec << " : icount: " << (print_it->second.counter) << std::endl;
+	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) {
+		// TODO: this is not sorted by the counter
+
+		file << (print_it->second.rtn_name) <<
+			" at 0x" << std::hex << print_it->second.rtn_addr -  print_it->second.img_addr <<
+			std::dec << " : icount: " << (print_it->second.counter) << std::endl;
+
 		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
 		int i = 0;
 		for(std::vector<bbl_val_t*>::iterator rtn_it = print_it->second.printing_bbl_list.begin() ; rtn_it != print_it->second.printing_bbl_list.end() ; ++rtn_it) {
-			file << "\tBB" << i << ": 0x" << std::hex << (*rtn_it)->first_ins << " - 0x" << (*rtn_it)->last_ins << std::dec << std::endl;
+			file << "\tBB" << i << std::hex <<
+				": 0x"  << (*rtn_it)->first_ins - (*rtn_it)->img_addr <<
+				" - 0x" << (*rtn_it)->last_ins  - (*rtn_it)->img_addr <<
+				std::dec << std::endl;
 			(*rtn_it)->idx_for_printing = i;
 			i++;
 		}
+
 //		std::sort(print_it->second.printing_edges.begin(), print_it->second.printing_edges.end(), print_edges_cmp);	// TODO: when I uncomment this line, I get a semnentation fault
 		i = 0;
 		for(std::vector<printing_edge_t>::iterator edge_it = print_it->second.printing_edges.begin() ; edge_it != print_it->second.printing_edges.end() ; ++edge_it) {
