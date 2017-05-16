@@ -230,7 +230,9 @@ struct printing_rtn_t {
 	string rtn_name;
 	ADDRINT rtn_addr;
 	ADDRINT img_addr;
-	//std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
+	std::set<std::pair<ADDRINT, USIZE> > bbls;	// I will use the order as index. <base, size> is good for sorting
+												//  I want it to be bbl_key_t, but it is const for compilation of
+												// other stuff. BAH
 	//std::vector<printing_edge_t> printing_edges; // TODO: use this
 };
 /*
@@ -240,10 +242,26 @@ struct aaa{
 		return (a->last_ins < b->last_ins);
         }   
 } cmp_bbl_val_t_ptr;
+*/
 
+struct cmp_printing_rtn{
+	bool operator()(const printing_rtn_t& n1, const printing_rtn_t& n2) const {   
+		if (n1.counter < n2.counter)
+			return true;
+		if (n1.counter > n2.counter)
+			return false;
+			
+		if (n1.rtn_name < n2.rtn_name)
+			return true;
+		if (n1.rtn_name > n2.rtn_name)
+			return false;
+		return (n1.rtn_addr < n2.rtn_addr);
+}  
+};
+/*
 bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
 {
-        if (n1.counter < n2.counter) return true;
+	if (n1.counter < n2.counter) return true;
 	return n1.rtn_name < n2.rtn_name;
 }
 */
@@ -265,7 +283,7 @@ void print(const std::string &file_name)
 			print_it = printing_ds.insert(printing_ds.begin(), make_pair(it->second.rtn_addr, printing_rtn));
 		}
 		print_it->second.counter += (it->first.second * it->second.counter);
-		//print_it->second.printing_bbl_list.push_back(&(it->second));
+		print_it->second.bbls.insert(it->first);
 /*
 		if (it->second.target_count[0])
 		{
@@ -297,11 +315,16 @@ void print(const std::string &file_name)
 */
 	}
 
+	std::set<printing_rtn_t, cmp_printing_rtn> printing_ds_sorted;
 	for(std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) {
+		printing_ds_sorted.insert(print_it->second);
+	}
+
+	for(std::set<printing_rtn_t, cmp_printing_rtn>::iterator print_it = printing_ds_sorted.begin() ; print_it != printing_ds_sorted.end() ; ++print_it) {
 		// TODO: this is not sorted by the counter
-		file << (print_it->second.rtn_name) <<
-			" at 0x" << std::hex << print_it->second.rtn_addr -  print_it->second.img_addr <<
-			std::dec << " : icount: " << (print_it->second.counter) << std::endl;
+		file << (print_it->rtn_name) <<
+			" at 0x" << std::hex << print_it->rtn_addr -  print_it->img_addr <<
+			std::dec << " : icount: " << (print_it->counter) << std::endl;
 /*
 		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
 		int i = 0;
@@ -320,7 +343,7 @@ void print(const std::string &file_name)
 			file << "\t\tEdge" << i << ": BB" << edge_it->edge_from->idx_for_printing << " --> BB" << edge_it->edge_to->idx_for_printing << "\t" << edge_it->edge_count << std::endl;
 			i++;
 		}
-		*/
+	*/	
 	}
 
 }
