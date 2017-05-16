@@ -284,35 +284,6 @@ void print(const std::string &file_name)
 		}
 		print_it->second.counter += (it->first.second * it->second.counter);
 		print_it->second.bbls.insert(it->first);
-/*
-		if (it->second.target_count[0])
-		{
-			g_bbl_map_t::iterator to_it = g_bbl_map.find(it->second.target[0]);
-			if (to_it != g_bbl_map.end())
-			{
-				printing_edge_t edge;
-				edge.edge_from = &(it->second);
-				edge.edge_to = &to_it->second;
-				edge.edge_count = it->second.target_count[0];
-				if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
-					print_it->second.printing_edges.push_back(edge);
-			}
-		}
-
-		if (it->second.target_count[1])
-		{
-			g_bbl_map_t::iterator to_it = g_bbl_map.find(it->second.target[1]);
-			if (to_it != g_bbl_map.end())
-			{
-				printing_edge_t edge;
-				edge.edge_from = &(it->second);
-				edge.edge_to = &to_it->second;
-				edge.edge_count = it->second.target_count[1];
-				if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
-					print_it->second.printing_edges.push_back(edge);
-			}
-		}
-*/
 	}
 
 	std::set<printing_rtn_t, cmp_printing_rtn> printing_ds_sorted;
@@ -325,6 +296,18 @@ void print(const std::string &file_name)
 		file << (print_it->rtn_name) <<
 			" at 0x" << std::hex << print_it->rtn_addr -  print_it->img_addr <<
 			std::dec << " : icount: " << (print_it->counter) << std::endl;
+			
+		int i = 0;
+		for(std::set<std::pair<ADDRINT, USIZE> >::const_iterator bbl_it = print_it->bbls.begin() ; bbl_it != print_it->bbls.end() ; ++bbl_it) {
+			bbl_key_t bbl_key = *bbl_it;
+			bbl_val_t* bbl_val = &(g_bbl_map[bbl_key]);
+			file << "\tBB" << i << std::hex <<
+				": 0x"  << bbl_key.first - bbl_val->img_addr <<
+				" - 0x" << bbl_key.first + bbl_key.second  - bbl_val->img_addr <<
+				std::dec << std::endl;
+				bbl_val->idx_for_printing = i;
+				i++;
+		}
 /*
 		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
 		int i = 0;
