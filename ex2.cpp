@@ -16,12 +16,13 @@
 #include <algorithm>
 
 
-typedef ADDRINT bbl_key_t;
+typedef std::pair<ADDRINT, USIZE> bbl_key_t;	// bbl_addr, bbl_size
 struct bbl_val_t
 {
 	unsigned long counter;	// #times this BBL was executed
-	/* const */ ADDRINT first_ins;
-	/* const */ ADDRINT last_ins;
+//	/* const */ ADDRINT first_ins;	// deleted becaue same as in the key
+//	/* const */ ADDRINT last_ins;
+	/* const */ bool ends_with_direct_jump;
 	/* const */ std::string rtn_name;
 	/* const */ ADDRINT rtn_addr;
 	/* const */ USIZE size;
@@ -35,17 +36,37 @@ struct bbl_val_t
 	int idx_for_printing;	// used only for printing
 };
 
+bbk_key_t* g_last_bbl_key_ptr = NULL;
+bbk_val_t* g_last_bbl_val_ptr = NULL;
+
 typedef std::map<bbl_key_t, bbl_val_t> g_bbl_map_t;
 g_bbl_map_t g_bbl_map;
 
 typedef std::map<std::string, ADDRINT> g_img_map_t;
 g_img_map_t g_img_map;
 
-VOID bbl_count(struct bbl_val_t* bbl_val_ptr)
+VOID bbl_count(struct bbl_key_t* bbl_key_ptr, struct bbl_val_t* bbl_val_ptr)
 {
-	++bbl_val_ptr->counter;
-}
+	if((!g_last_bbl_key) || (!g_last_bbl_val) || (bbl_val_ptr->rtn_addr != g_last_bbl_val_ptr->rtn_addr )) {
+		goto out;
+	}
+	if(g_last_bbl_val_ptr->target[0] = bbl_key_ptr->first) {	// we came here after a taken jump
+		if(!(g_last_bbl_val_ptr->ends_with_direct_jump))
+			goto out;	// we were instructed to ignore indirect jumps
+		g_last_bbl_val_ptr->target_count[0] ++;
+		goto out;
+	}
+	// if we got here, we didn't come here due to a teken jump
+	if(!(g_last_bbl_val_ptr->target[1] = bbl_key_ptr->first))	// this is not a fallthrough address neither
+		goto out;
+	g_last_bbl_val_ptr->target_count[1] ++;
 
+out:
+	g_last_bbl_key_ptr = bbl_key_ptr;
+	g_last_bbl_val_ptr = bbl_val_ptr;
+
+}
+/*
 VOID direct_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fallthroughAddr, ADDRINT takenAddr)
 {
 	bbl_val_ptr->target[0] = fallthroughAddr;
@@ -61,7 +82,7 @@ VOID fallthrough_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRIN
 		++bbl_val_ptr->target_count[0];
 	}
 }
-
+*/
 VOID Img(IMG img, VOID *v) // why VOID *v ?
 {
 	g_img_map[IMG_Name(img)] = IMG_LowAddress(img);
