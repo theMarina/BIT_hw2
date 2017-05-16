@@ -224,16 +224,16 @@ struct aaaa{
 		return n1.edge_to->idx_for_printing < n2.edge_to->idx_for_printing;
 	}
 }print_edges_cmp;
-
+*/
 struct printing_rtn_t {
 	unsigned long counter;	//counter*bbl_size
 	string rtn_name;
 	ADDRINT rtn_addr;
 	ADDRINT img_addr;
-	std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
-	std::vector<printing_edge_t> printing_edges; // TODO: use this
+	//std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
+	//std::vector<printing_edge_t> printing_edges; // TODO: use this
 };
-
+/*
 struct aaa{
 	bool operator()(bbl_val_t* a, bbl_val_t* b) const {   
 		if(a->first_ins < b->first_ins) return true;
@@ -251,11 +251,11 @@ bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
 void print(const std::string &file_name)
 {
 	std::ofstream file(file_name.c_str());
-/*
-	std::map<ADDRINT, printing_rtn_t> printing_ds;
 
-	for(std::map<bbl_key_t, bbl_val_t>::iterator it = g_bbl_map.begin() ; it != g_bbl_map.end() ; ++it) {
-		std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.find(it->second.rtn_addr);
+	std::map<ADDRINT, printing_rtn_t> printing_ds; // key is rtn_addr
+
+	for(g_bbl_map_t::iterator it = g_bbl_map.begin() ; it != g_bbl_map.end() ; ++it) {
+		std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.find(it->first.first);
 		if(print_it == printing_ds.end()) {
 			printing_rtn_t printing_rtn;
 			printing_rtn.counter = 0;
@@ -264,9 +264,9 @@ void print(const std::string &file_name)
 			printing_rtn.img_addr = it->second.img_addr;
 			print_it = printing_ds.insert(printing_ds.begin(), make_pair(it->second.rtn_addr, printing_rtn));
 		}
-		print_it->second.counter += (it->second.size * it->second.counter);
-		print_it->second.printing_bbl_list.push_back(&(it->second));
-
+		print_it->second.counter += (it->first.second * it->second.counter);
+		//print_it->second.printing_bbl_list.push_back(&(it->second));
+/*
 		if (it->second.target_count[0])
 		{
 			g_bbl_map_t::iterator to_it = g_bbl_map.find(it->second.target[0]);
@@ -294,16 +294,15 @@ void print(const std::string &file_name)
 					print_it->second.printing_edges.push_back(edge);
 			}
 		}
-
+*/
 	}
 
 	for(std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) {
 		// TODO: this is not sorted by the counter
-
 		file << (print_it->second.rtn_name) <<
 			" at 0x" << std::hex << print_it->second.rtn_addr -  print_it->second.img_addr <<
 			std::dec << " : icount: " << (print_it->second.counter) << std::endl;
-
+/*
 		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
 		int i = 0;
 		for(std::vector<bbl_val_t*>::iterator rtn_it = print_it->second.printing_bbl_list.begin() ; rtn_it != print_it->second.printing_bbl_list.end() ; ++rtn_it) {
@@ -321,8 +320,9 @@ void print(const std::string &file_name)
 			file << "\t\tEdge" << i << ": BB" << edge_it->edge_from->idx_for_printing << " --> BB" << edge_it->edge_to->idx_for_printing << "\t" << edge_it->edge_count << std::endl;
 			i++;
 		}
+		*/
 	}
-*/
+
 }
 
 VOID Fini(INT32 code, VOID *v)
