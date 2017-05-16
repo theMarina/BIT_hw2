@@ -15,17 +15,6 @@
 #include <iostream> // TODO: delete this line
 #include <algorithm>
 
-typedef std::pair<UINT32, unsigned int> func_t;
-struct more_func{ bool operator() (const func_t& x, const func_t& y)
-	{return (x.second  > y.second) || 
-		(x.second == y.second && x.first > y.first);}};
-
-typedef std::map<INT32, unsigned int> func_list_t;
-typedef std::map<INT32,std::string> func_names_t;
-typedef std::set<func_t, more_func> sorted_func_list_t;
-
-func_list_t g_func_list;
-func_names_t g_func_names;
 
 typedef ADDRINT bbl_key_t;
 struct bbl_val_t
