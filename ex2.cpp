@@ -27,10 +27,6 @@ struct bbl_val_t
 	/* const */ ADDRINT last_ins;
 	/* const */ std::string rtn_name;
 	/* const */ ADDRINT rtn_addr;
-	/* const */ INT32 rtn_id;	// this is just for runtime, for performance
-				// because on each jump, the invoked BBL has
-				// to check if last instruction (from global
-				// variable) was from the same RTN
 	/* const */ UINT32 size;
 
 	/* const */ std::string img_name;
@@ -89,7 +85,6 @@ VOID Trace(TRACE trace, VOID *v)
 			bbl_val.size = BBL_Size(bbl);
 			bbl_val.first_ins = INS_Address(first_ins);
 			bbl_val.last_ins = INS_Address(last_ins);
-			bbl_val.rtn_id = RTN_Id(rtn);
 			bbl_val.rtn_name = RTN_Name(rtn);
 			bbl_val.rtn_addr = RTN_Address(rtn);
 			bbl_val.img_name = IMG_Name(img);
@@ -102,6 +97,7 @@ VOID Trace(TRACE trace, VOID *v)
 		
 		struct bbl_val_t* bbl_val_ptr = &(it->second);
 
+		//std::cout << std::hex << bbl_val_ptr->first_ins << std::dec << ": " << bbl_val_ptr->size << std::endl;
 		//std::cout << std::hex << bbl_val_ptr->last_ins << std::dec << ": " << INS_Disassemble(last_ins) << std::endl;
 
 		BBL_InsertCall(bbl,
@@ -189,21 +185,26 @@ bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
 }
 
 
-VOID Fini(INT32 code, VOID *v)
+void update_file(const std::string &file_name)
 {
-	std::ofstream file("rtn-output.txt");
 
-	std::map<INT32, printing_rtn_t> printing_ds;	// RTN_id to printing_rtn_t
+}
+
+void print(const std::string &file_name)
+{
+	std::ofstream file(file_name);
+
+	std::map<ADDRINT, printing_rtn_t> printing_ds;
 
 	for(std::map<bbl_key_t, bbl_val_t>::iterator it = g_bbl_map.begin() ; it != g_bbl_map.end() ; ++it) {
-		std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.find(it->second.rtn_id);
+		std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.find(it->second.rtn_addr);
 		if(print_it == printing_ds.end()) {
 			printing_rtn_t printing_rtn;
 			printing_rtn.counter = 0;
 			printing_rtn.rtn_name = it->second.rtn_name;
 			printing_rtn.rtn_addr = it->second.rtn_addr;
 			printing_rtn.img_addr = it->second.img_addr;
-			print_it = printing_ds.insert(printing_ds.begin(), make_pair(it->second.rtn_id, printing_rtn));
+			print_it = printing_ds.insert(printing_ds.begin(), make_pair(it->second.rtn_addr, printing_rtn));
 		}
 		print_it->second.counter += (it->second.size * it->second.counter);
 		print_it->second.printing_bbl_list.push_back(&(it->second));
@@ -214,7 +215,7 @@ VOID Fini(INT32 code, VOID *v)
 			edge.edge_from = &(it->second);
 			edge.edge_to = &g_bbl_map[it->second.target[0]];
 			edge.edge_count = it->second.target_count[0];
-			if (edge.edge_from->rtn_id == edge.edge_to->rtn_id)
+			if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
 				print_it->second.printing_edges.push_back(edge);
 			//std::cout << "0 from: " << std::hex << edge.edge_from->first_ins << " to: " << edge.edge_to->first_ins << std::dec << std::endl;
 		}
@@ -225,13 +226,13 @@ VOID Fini(INT32 code, VOID *v)
 			edge.edge_from = &(it->second);
 			edge.edge_to = &g_bbl_map[it->second.target[1]];
 			edge.edge_count = it->second.target_count[1];
-			if (edge.edge_from->rtn_id == edge.edge_to->rtn_id)
+			if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
 				print_it->second.printing_edges.push_back(edge);
 			//std::cout << "1 from: " << std::hex << edge.edge_from->first_ins << " to: " << edge.edge_to->first_ins << std::dec << std::endl;
 		}
 	}
 
-	for(std::map<INT32, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) {
+	for(std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) {
 		// TODO: this is not sorted by the counter
 
 		file << (print_it->second.rtn_name) <<
@@ -256,6 +257,12 @@ VOID Fini(INT32 code, VOID *v)
 			i++;
 		}
 	}
+}
+
+VOID Fini(INT32 code, VOID *v)
+{
+	update_file("1");
+	print("rtn-output.txt");
 }
 
 int main(int argc, char *argv[])
