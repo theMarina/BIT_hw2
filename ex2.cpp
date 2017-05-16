@@ -24,7 +24,7 @@ struct bbl_val_t
 	/* const */ ADDRINT last_ins;
 	/* const */ std::string rtn_name;
 	/* const */ ADDRINT rtn_addr;
-	/* const */ UINT32 size;
+	/* const */ USIZE size;
 
 	/* const */ std::string img_name;
 	/* const */ ADDRINT img_addr;
@@ -62,7 +62,7 @@ VOID fallthrough_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRIN
 	}
 }
 
-VOID Img(IMG img, VOID *v)
+VOID Img(IMG img, VOID *v) // why VOID *v ?
 {
 	g_img_map[IMG_Name(img)] = IMG_LowAddress(img);
 }
