@@ -1,5 +1,11 @@
 #include "pin.H"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <fstream>
 #include <string>
 #include <set>
@@ -184,15 +190,73 @@ bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
 	return n1.rtn_name < n2.rtn_name;
 }
 
+#pragma pack(1)
+struct bbl_to_file_t
+{
+	unsigned long counter;
+	ADDRINT first_ins;
+	ADDRINT last_ins;
+	ADDRINT rtn_addr;
+	UINT32 size;
+	char img_name[255];
+	ADDRINT target[2];
+	unsigned int target_count[2];
+};
 
 void update_file(const std::string &file_name)
 {
+	int fd;
+	char *buff, *p;
+	unsigned int count = 0, map_size = 0;
+
+	if ((fd = open(file_name.c_str(), O_RDONLY)) >= 0) { //read file
+
+		map_size = sizeof(count);
+		if ((p = buff = (char*)mmap(0, map_size, PROT_READ, MAP_SHARED, fd, 0)) == (caddr_t) -1) {std::cerr << "Error" << std::endl; return;}
+
+		count = *(unsigned int*)p;
+		map_size += count * sizeof(bbl_to_file_t);
+
+		if ((p = buff = (char*)mmap(0, map_size, PROT_READ, MAP_SHARED, fd, 0)) == (caddr_t) -1) {std::cerr << "Error" << std::endl; return;}
+		p += sizeof(count);
+
+		for (unsigned int i = 0; i < count; ++i) {
+			//do something
+		}
+
+		if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
+	}
+
+	count = g_bbl_map.size();
+	std::cout << "gilkup " << count << " " << sizeof(bbl_to_file_t) << std::endl;
+	map_size = sizeof(count) + count * sizeof(bbl_to_file_t);
+
+	if ((fd = open(file_name.c_str(), O_RDWR | O_CREAT , S_IRWXU)) < 0) {std::cerr << "Error" << std::endl; return;}
+
+	//write dummy byte
+	if (lseek(fd, map_size-1, 0) == -1) {std::cerr << "Error" << std::endl; return;}
+	if (write(fd, "", 1) != 1) {std::cerr << "Error" << std::endl; return;}
+	if (lseek(fd, 0, 0) == -1) {std::cerr << "Error" << std::endl; return;}
+
+	if ((p = buff = (char*)mmap(0, sizeof(count), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)) == (caddr_t) -1) {
+		std::cerr << "Error" << std::endl;
+		return;
+	}
+
+	for (unsigned int i = 0; i < count; ++i) {
+		//do something
+	}
+
+	*(unsigned int*)p = count;
+	p += sizeof(count);
+
+	if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
 
 }
 
 void print(const std::string &file_name)
 {
-	std::ofstream file(file_name);
+	std::ofstream file(file_name.c_str());
 
 	std::map<ADDRINT, printing_rtn_t> printing_ds;
 
@@ -261,7 +325,7 @@ void print(const std::string &file_name)
 
 VOID Fini(INT32 code, VOID *v)
 {
-	update_file("1");
+	update_file("__profile.map");
 	print("rtn-output.txt");
 }
 
