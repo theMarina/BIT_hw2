@@ -16,12 +16,10 @@
 #include <algorithm>
 
 
-typedef std::pair<ADDRINT, USIZE> bbl_key_t;	// bbl_addr, bbl_size
+typedef const std::pair<ADDRINT, USIZE> bbl_key_t;	// bbl_addr, bbl_size
 struct bbl_val_t
 {
 	unsigned long counter;	// #times this BBL was executed
-//	/* const */ ADDRINT first_ins;	// deleted becaue same as in the key
-//	/* const */ ADDRINT last_ins;
 	/* const */ bool ends_with_direct_jump;
 	/* const */ std::string rtn_name;
 	/* const */ ADDRINT rtn_addr;
@@ -31,13 +29,11 @@ struct bbl_val_t
 	/* const */ ADDRINT img_addr;
 
 	ADDRINT target[2]; // taken/not taken
-	unsigned int target_count[2];
-
+	std::map<bbl_key_t, int> target_count;	// could have more than 2 targets (different BBs on same address)
 	int idx_for_printing;	// used only for printing
 };
 
-bbk_key_t* g_last_bbl_key_ptr = NULL;
-bbk_val_t* g_last_bbl_val_ptr = NULL;
+std::pair<bbl_key_t, bbl_val_t>* g_last_bbl_ptr = NULL;
 
 typedef std::map<bbl_key_t, bbl_val_t> g_bbl_map_t;
 g_bbl_map_t g_bbl_map;
@@ -45,146 +41,29 @@ g_bbl_map_t g_bbl_map;
 typedef std::map<std::string, ADDRINT> g_img_map_t;
 g_img_map_t g_img_map;
 
-VOID bbl_count(struct bbl_key_t* bbl_key_ptr, struct bbl_val_t* bbl_val_ptr)
+VOID bbl_count(std::pair<bbl_key_t, bbl_val_t>* curr_bbl_ptr)
 {
-	if((!g_last_bbl_key) || (!g_last_bbl_val) || (bbl_val_ptr->rtn_addr != g_last_bbl_val_ptr->rtn_addr )) {
+	//std:: cout << curr_bbl_ptr->first.first << std::endl;
+	curr_bbl_ptr->second.counter++;
+	if(!g_last_bbl_ptr)
 		goto out;
+	if(g_last_bbl_ptr->second.target[1] == curr_bbl_ptr->first.first  //fall through
+			|| (g_last_bbl_ptr->second.ends_with_direct_jump    // direct branch target
+			 && ((g_last_bbl_ptr->second.target[0]) == (curr_bbl_ptr->first.first)))){	// direct branch target
+		if(g_last_bbl_ptr->second.target_count.find(curr_bbl_ptr->first) == g_last_bbl_ptr->second.target_count.end()) {
+			g_last_bbl_ptr->second.target_count[curr_bbl_ptr->first] = 1;
+		} else {
+			g_last_bbl_ptr->second.target_count[curr_bbl_ptr->first] ++;
+		}
 	}
-	if(g_last_bbl_val_ptr->target[0] = bbl_key_ptr->first) {	// we came here after a taken jump
-		if(!(g_last_bbl_val_ptr->ends_with_direct_jump))
-			goto out;	// we were instructed to ignore indirect jumps
-		g_last_bbl_val_ptr->target_count[0] ++;
-		goto out;
-	}
-	// if we got here, we didn't come here due to a teken jump
-	if(!(g_last_bbl_val_ptr->target[1] = bbl_key_ptr->first))	// this is not a fallthrough address neither
-		goto out;
-	g_last_bbl_val_ptr->target_count[1] ++;
-
 out:
-	g_last_bbl_key_ptr = bbl_key_ptr;
-	g_last_bbl_val_ptr = bbl_val_ptr;
+	g_last_bbl_ptr = curr_bbl_ptr;
 
 }
-/*
-VOID direct_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fallthroughAddr, ADDRINT takenAddr)
-{
-	bbl_val_ptr->target[0] = fallthroughAddr;
-	bbl_val_ptr->target[1] = takenAddr;
-	++bbl_val_ptr->target_count[!!isTaken];
-}
 
-VOID fallthrough_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fallthroughAddr)
-{
-	if (!isTaken)
-	{
-		bbl_val_ptr->target[0] = fallthroughAddr;
-		++bbl_val_ptr->target_count[0];
-	}
-}
-*/
 VOID Img(IMG img, VOID *v) // why VOID *v ?
 {
 	g_img_map[IMG_Name(img)] = IMG_LowAddress(img);
-}
-
-VOID Trace(TRACE trace, VOID *v)
-{
-	for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
-	{
-		bbl_key_t bbl_key = BBL_Address(bbl);
-
-		INS first_ins = BBL_InsHead(bbl);
-		INS last_ins = BBL_InsTail(bbl);
-
-		RTN rtn = INS_Rtn(first_ins);
-		if (!RTN_Valid(rtn)) continue;
-
-		IMG img = IMG_FindByAddress(bbl_key);
-
-		std::map<bbl_key_t, bbl_val_t>::iterator it = g_bbl_map.find(bbl_key);
-		if(it == g_bbl_map.end()) {	// creating a new entry in the map
-			struct bbl_val_t bbl_val;
-
-			bbl_val.counter = 0;
-			bbl_val.size = BBL_Size(bbl);
-			bbl_val.first_ins = INS_Address(first_ins);
-			bbl_val.last_ins = INS_Address(last_ins);
-			bbl_val.rtn_name = RTN_Name(rtn);
-			bbl_val.rtn_addr = RTN_Address(rtn);
-			bbl_val.img_name = IMG_Name(img);
-			bbl_val.img_addr = IMG_LowAddress(img);
-			bbl_val.target[0] = bbl_val.target[1] = 0;
-			bbl_val.target_count[0] = bbl_val.target_count[1] = 0;
-
-			it = g_bbl_map.insert(g_bbl_map.begin(), make_pair(bbl_key, bbl_val));
-		}
-		
-		struct bbl_val_t* bbl_val_ptr = &(it->second);
-
-		//std::cout << std::hex << bbl_val_ptr->first_ins << std::dec << ": " << bbl_val_ptr->size << std::endl;
-		//std::cout << std::hex << bbl_val_ptr->last_ins << std::dec << ": " << INS_Disassemble(last_ins) << std::endl;
-
-		BBL_InsertCall(bbl,
-			IPOINT_BEFORE,
-			(AFUNPTR)bbl_count,
-			IARG_PTR, (void*)bbl_val_ptr,
-			IARG_END);
-
-		if(INS_IsDirectBranch(last_ins))
-			INS_InsertCall(last_ins,
-				IPOINT_BEFORE,
-				(AFUNPTR)direct_edge_count,
-				IARG_PTR, (void*)bbl_val_ptr,
-				IARG_BRANCH_TAKEN,
-				IARG_FALLTHROUGH_ADDR,
-				IARG_BRANCH_TARGET_ADDR,
-				IARG_END);
-		else
-			INS_InsertCall(last_ins,
-				IPOINT_BEFORE,
-				(AFUNPTR)fallthrough_edge_count,
-				IARG_PTR, (void*)bbl_val_ptr,
-				IARG_BRANCH_TAKEN,
-				IARG_FALLTHROUGH_ADDR,
-				IARG_END);
-	}
-}
-
-struct printing_edge_t {
-	bbl_val_t* edge_from;	//  using bbl_val_t* as a unique bbl identifier
-	bbl_val_t* edge_to;	//  using bbl_val_t* as a unique bbl identifier
-	unsigned long edge_count;
-};
-
-struct aaaa{
-	bool operator()(const printing_edge_t& n1, const printing_edge_t& n2) {
-		if(n1.edge_count < n2.edge_count) return true;
-		if(n1.edge_from->idx_for_printing < n2.edge_from->idx_for_printing) return true;
-		return n1.edge_to->idx_for_printing < n2.edge_to->idx_for_printing;
-	}
-}print_edges_cmp;
-
-struct printing_rtn_t {
-	unsigned long counter;	//counter*bbl_size
-	string rtn_name;
-	ADDRINT rtn_addr;
-	ADDRINT img_addr;
-	std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
-	std::vector<printing_edge_t> printing_edges; // TODO: use this
-};
-
-struct aaa{
-	bool operator()(bbl_val_t* a, bbl_val_t* b) const {   
-		if(a->first_ins < b->first_ins) return true;
-		return (a->last_ins < b->last_ins);
-        }   
-} cmp_bbl_val_t_ptr;
-
-bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
-{
-        if (n1.counter < n2.counter) return true;
-	return n1.rtn_name < n2.rtn_name;
 }
 
 #pragma pack(1)
@@ -199,7 +78,7 @@ struct bbl_to_file_t
 	ADDRINT target[2];
 	unsigned int target_count[2];
 };
-
+/*
 void update_file(const std::string &file_name)
 {
 	int fd;
@@ -281,11 +160,98 @@ void update_file(const std::string &file_name)
 
 	if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
 }
+*/
+
+
+VOID Trace(TRACE trace, VOID *v)
+{
+	for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
+	{
+		ADDRINT bbl_addr = BBL_Address(bbl);
+		USIZE bbl_size = BBL_Size(bbl);
+		bbl_key_t bbl_key = make_pair(bbl_addr, bbl_size);
+
+		INS first_ins = BBL_InsHead(bbl);
+		INS last_ins = BBL_InsTail(bbl);
+
+		RTN rtn = INS_Rtn(first_ins);
+		if (!RTN_Valid(rtn)) continue;
+
+		IMG img = IMG_FindByAddress(bbl_addr);
+
+		g_bbl_map_t::iterator it = g_bbl_map.find(bbl_key);
+		if(it == g_bbl_map.end()) {	// creating a new entry in the map
+			struct bbl_val_t bbl_val;
+
+			bbl_val.counter = 0;
+			bbl_val.ends_with_direct_jump = INS_IsDirectBranch(last_ins);
+			bbl_val.rtn_name = RTN_Name(rtn);
+			bbl_val.rtn_addr = RTN_Address(rtn);
+			bbl_val.img_name = IMG_Name(img);
+			bbl_val.img_addr = IMG_LowAddress(img);
+			bbl_val.target[0] = 0;
+			if(INS_IsDirectBranchOrCall(last_ins))
+				bbl_val.target[0] = INS_DirectBranchOrCallTargetAddress(last_ins);
+			bbl_val.target[1] = bbl_addr + bbl_size;
+
+			it = g_bbl_map.insert(g_bbl_map.begin(), make_pair(bbl_key, bbl_val));
+		}
+		
+		std::pair<bbl_key_t, bbl_val_t>* bbl_ptr = &(*it);
+
+		BBL_InsertCall(bbl,
+			IPOINT_BEFORE,
+			(AFUNPTR)bbl_count,
+			IARG_PTR, (void*)bbl_ptr,
+			IARG_END);
+
+		//std::cout << std::hex << bbl_val_ptr->first_ins << std::dec << ": " << bbl_val_ptr->size << std::endl;
+		//std::cout << std::hex << bbl_val_ptr->last_ins << std::dec << ": " << INS_Disassemble(last_ins) << std::endl;
+		
+	}
+}
+/*
+struct printing_edge_t {
+	bbl_val_t* edge_from;	//  using bbl_val_t* as a unique bbl identifier
+	bbl_val_t* edge_to;	//  using bbl_val_t* as a unique bbl identifier
+	unsigned long edge_count;
+};
+
+struct aaaa{
+	bool operator()(const printing_edge_t& n1, const printing_edge_t& n2) {
+		if(n1.edge_count < n2.edge_count) return true;
+		if(n1.edge_from->idx_for_printing < n2.edge_from->idx_for_printing) return true;
+		return n1.edge_to->idx_for_printing < n2.edge_to->idx_for_printing;
+	}
+}print_edges_cmp;
+
+struct printing_rtn_t {
+	unsigned long counter;	//counter*bbl_size
+	string rtn_name;
+	ADDRINT rtn_addr;
+	ADDRINT img_addr;
+	std::vector<bbl_val_t*> printing_bbl_list; //  using bbl_val_t* as a unique bbl identifier
+	std::vector<printing_edge_t> printing_edges; // TODO: use this
+};
+
+struct aaa{
+	bool operator()(bbl_val_t* a, bbl_val_t* b) const {   
+		if(a->first_ins < b->first_ins) return true;
+		return (a->last_ins < b->last_ins);
+        }   
+} cmp_bbl_val_t_ptr;
+
+bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
+{
+        if (n1.counter < n2.counter) return true;
+	return n1.rtn_name < n2.rtn_name;
+}
+*/
 
 void print(const std::string &file_name)
 {
 	std::ofstream file(file_name.c_str());
-
+/*
 	std::map<ADDRINT, printing_rtn_t> printing_ds;
 
 	for(std::map<bbl_key_t, bbl_val_t>::iterator it = g_bbl_map.begin() ; it != g_bbl_map.end() ; ++it) {
@@ -356,12 +322,12 @@ void print(const std::string &file_name)
 			i++;
 		}
 	}
-
+*/
 }
 
 VOID Fini(INT32 code, VOID *v)
 {
-	update_file("__profile.map");
+//	update_file("__profile.map");
 	print("rtn-output.txt");
 }
 
