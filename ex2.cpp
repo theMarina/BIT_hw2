@@ -49,6 +49,9 @@ struct bbl_val_t
 typedef std::map<bbl_key_t, bbl_val_t> g_bbl_map_t;
 g_bbl_map_t g_bbl_map;
 
+typedef std::map<std::string, ADDRINT> g_img_map_t;
+g_img_map_t g_img_map;
+
 VOID bbl_count(struct bbl_val_t* bbl_val_ptr)
 {
 	++bbl_val_ptr->counter;
@@ -59,8 +62,6 @@ VOID direct_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fal
 	bbl_val_ptr->target[0] = fallthroughAddr;
 	bbl_val_ptr->target[1] = takenAddr;
 	++bbl_val_ptr->target_count[!!isTaken];
-
-	//std::cout << "gilkup: " << std::hex << fallthroughAddr << "/" << takenAddr << std::dec << " Taken:" << isTaken <<  std::endl;
 }
 
 VOID fallthrough_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fallthroughAddr)
@@ -70,6 +71,11 @@ VOID fallthrough_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRIN
 		bbl_val_ptr->target[0] = fallthroughAddr;
 		++bbl_val_ptr->target_count[0];
 	}
+}
+
+VOID Img(IMG img, VOID *v)
+{
+	g_img_map[IMG_Name(img)] = IMG_LowAddress(img);
 }
 
 VOID Trace(TRACE trace, VOID *v)
@@ -124,28 +130,6 @@ VOID Trace(TRACE trace, VOID *v)
 				IARG_FALLTHROUGH_ADDR,
 				IARG_BRANCH_TARGET_ADDR,
 				IARG_END);
-#if 0
-		else if(INS_IsBranchOrCall(last_ins))
-			INS_InsertCall(last_ins,
-				IPOINT_BEFORE,
-				(AFUNPTR)fallthrough_edge_count,
-				IARG_PTR, (void*)bbl_val_ptr,
-				IARG_BRANCH_TAKEN,
-				IARG_FALLTHROUGH_ADDR,
-				IARG_END);
-
-		else if (INS_HasRealRep(last_ins))
-		/*
-			INS_InsertCall(last_ins,
-				IPOINT_AFTER,
-				(AFUNPTR)direct_edge_count,
-				IARG_PTR, (void*)bbl_val_ptr,
-				IARG_BRANCH_TAKEN,
-				IARG_FALLTHROUGH_ADDR,
-				IARG_INST_PTR,
-				IARG_END);
-		*/;
-#endif
 		else
 			INS_InsertCall(last_ins,
 				IPOINT_BEFORE,
@@ -224,7 +208,27 @@ void update_file(const std::string &file_name)
 		p += sizeof(count);
 
 		for (unsigned int i = 0; i < count; ++i) {
-			//do something
+			bbl_to_file_t *bbl = (bbl_to_file_t*)p;
+			p += sizeof (*bbl);
+
+			ADDRINT img_addr = g_img_map[bbl->img_name];
+
+			bbl_val_t &bbl_val = g_bbl_map[bbl->first_ins + img_addr];
+
+			bbl_val.counter += bbl->counter;
+			bbl_val.size = bbl->size;
+			bbl_val.first_ins = bbl->first_ins + img_addr;
+			bbl_val.last_ins = bbl->last_ins + img_addr;
+			bbl_val.rtn_addr = bbl->rtn_addr + img_addr;
+			bbl_val.img_name = std::string(bbl->img_name);
+			bbl_val.img_addr = img_addr;
+			bbl_val.target[0] = bbl->target[0] + img_addr;
+			bbl_val.target[1] = bbl->target[1] + img_addr;
+			bbl_val.target_count[0] += bbl->target_count[0];
+			bbl_val.target_count[1] += bbl->target_count[1];
+
+			RTN rtn = RTN_FindByAddress(bbl_val.rtn_addr);
+			if (RTN_Valid(rtn)) bbl_val.rtn_name = std::string(RTN_Name(rtn));
 		}
 
 		if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
@@ -289,25 +293,32 @@ void print(const std::string &file_name)
 
 		if (it->second.target_count[0])
 		{
-			printing_edge_t edge;
-			edge.edge_from = &(it->second);
-			edge.edge_to = &g_bbl_map[it->second.target[0]];
-			edge.edge_count = it->second.target_count[0];
-			if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
-				print_it->second.printing_edges.push_back(edge);
-			//std::cout << "0 from: " << std::hex << edge.edge_from->first_ins << " to: " << edge.edge_to->first_ins << std::dec << std::endl;
+			g_bbl_map_t::iterator to_it = g_bbl_map.find(it->second.target[0]);
+			if (to_it != g_bbl_map.end())
+			{
+				printing_edge_t edge;
+				edge.edge_from = &(it->second);
+				edge.edge_to = &to_it->second;
+				edge.edge_count = it->second.target_count[0];
+				if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
+					print_it->second.printing_edges.push_back(edge);
+			}
 		}
 
 		if (it->second.target_count[1])
 		{
-			printing_edge_t edge;
-			edge.edge_from = &(it->second);
-			edge.edge_to = &g_bbl_map[it->second.target[1]];
-			edge.edge_count = it->second.target_count[1];
-			if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
-				print_it->second.printing_edges.push_back(edge);
-			//std::cout << "1 from: " << std::hex << edge.edge_from->first_ins << " to: " << edge.edge_to->first_ins << std::dec << std::endl;
+			g_bbl_map_t::iterator to_it = g_bbl_map.find(it->second.target[1]);
+			if (to_it != g_bbl_map.end())
+			{
+				printing_edge_t edge;
+				edge.edge_from = &(it->second);
+				edge.edge_to = &to_it->second;
+				edge.edge_count = it->second.target_count[1];
+				if (edge.edge_from->rtn_addr == edge.edge_to->rtn_addr)
+					print_it->second.printing_edges.push_back(edge);
+			}
 		}
+
 	}
 
 	for(std::map<ADDRINT, printing_rtn_t>::iterator print_it = printing_ds.begin() ; print_it != printing_ds.end() ; ++print_it) {
@@ -335,6 +346,7 @@ void print(const std::string &file_name)
 			i++;
 		}
 	}
+
 }
 
 VOID Fini(INT32 code, VOID *v)
@@ -349,6 +361,7 @@ int main(int argc, char *argv[])
 	if(PIN_Init(argc,argv)) return -1;
     
 	TRACE_AddInstrumentFunction(Trace, 0);
+	IMG_AddInstrumentFunction(Img, 0);
 	PIN_AddFiniFunction(Fini, 0);
 
 	PIN_StartProgram();
