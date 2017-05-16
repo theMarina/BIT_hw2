@@ -53,8 +53,9 @@ VOID direct_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fal
 {
 	bbl_val_ptr->target[0] = fallthroughAddr;
 	bbl_val_ptr->target[1] = takenAddr;
-	//std::cout << "gilkup: " << std::hex << fallthroughAddr << "/" << takenAddr << std::dec << " Taken:" << isTaken <<  std::endl;
 	++bbl_val_ptr->target_count[!!isTaken];
+
+	//std::cout << "gilkup: " << std::hex << fallthroughAddr << "/" << takenAddr << std::dec << " Taken:" << isTaken <<  std::endl;
 }
 
 VOID fallthrough_edge_count(struct bbl_val_t* bbl_val_ptr, INT32 isTaken, ADDRINT fallthroughAddr)
@@ -118,7 +119,7 @@ VOID Trace(TRACE trace, VOID *v)
 				IARG_FALLTHROUGH_ADDR,
 				IARG_BRANCH_TARGET_ADDR,
 				IARG_END);
-
+#if 0
 		else if(INS_IsBranchOrCall(last_ins))
 			INS_InsertCall(last_ins,
 				IPOINT_BEFORE,
@@ -139,13 +140,13 @@ VOID Trace(TRACE trace, VOID *v)
 				IARG_INST_PTR,
 				IARG_END);
 		*/;
-
+#endif
 		else
 			INS_InsertCall(last_ins,
 				IPOINT_BEFORE,
 				(AFUNPTR)fallthrough_edge_count,
 				IARG_PTR, (void*)bbl_val_ptr,
-				IARG_BOOL, 0,
+				IARG_BRANCH_TAKEN,
 				IARG_FALLTHROUGH_ADDR,
 				IARG_END);
 	}
