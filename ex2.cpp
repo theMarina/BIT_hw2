@@ -1,5 +1,7 @@
 #include "pin.H"
 
+#include <assert.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -44,7 +46,8 @@ struct bbl_val_t
 	int idx_for_printing;	// used only for printing
 };
 
-std::map<bbl_key_t, bbl_val_t> g_bbl_map;
+typedef std::map<bbl_key_t, bbl_val_t> g_bbl_map_t;
+g_bbl_map_t g_bbl_map;
 
 VOID bbl_count(struct bbl_val_t* bbl_val_ptr)
 {
@@ -227,31 +230,42 @@ void update_file(const std::string &file_name)
 		if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
 	}
 
-	count = g_bbl_map.size();
-	std::cout << "gilkup " << count << " " << sizeof(bbl_to_file_t) << std::endl;
-	map_size = sizeof(count) + count * sizeof(bbl_to_file_t);
-
 	if ((fd = open(file_name.c_str(), O_RDWR | O_CREAT , S_IRWXU)) < 0) {std::cerr << "Error" << std::endl; return;}
+
+	count = g_bbl_map.size();
+	map_size = sizeof(count) + count * sizeof(bbl_to_file_t);
 
 	//write dummy byte
 	if (lseek(fd, map_size-1, 0) == -1) {std::cerr << "Error" << std::endl; return;}
 	if (write(fd, "", 1) != 1) {std::cerr << "Error" << std::endl; return;}
 	if (lseek(fd, 0, 0) == -1) {std::cerr << "Error" << std::endl; return;}
 
-	if ((p = buff = (char*)mmap(0, sizeof(count), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)) == (caddr_t) -1) {
+	if ((p = buff = (char*)mmap(0, map_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)) == (caddr_t) -1) {
 		std::cerr << "Error" << std::endl;
 		return;
-	}
-
-	for (unsigned int i = 0; i < count; ++i) {
-		//do something
 	}
 
 	*(unsigned int*)p = count;
 	p += sizeof(count);
 
-	if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
+	for (g_bbl_map_t::const_iterator i = g_bbl_map.begin(); i != g_bbl_map.end(); ++i)
+	{
+		bbl_to_file_t *bbl = (bbl_to_file_t*)p;
+		p += sizeof (*bbl);
 
+		bbl->counter = i->second.counter;
+		bbl->first_ins = i->second.first_ins - i->second.img_addr;
+		bbl->last_ins = i->second.last_ins - i->second.img_addr;
+		bbl->rtn_addr = i->second.rtn_addr - i->second.img_addr;
+		bbl->size = i->second.size;
+		strcpy(bbl->img_name, i->second.img_name.c_str());
+		bbl->target[0] = i->second.target[0] - i->second.img_addr;
+		bbl->target[1] = i->second.target[1] - i->second.img_addr;
+		bbl->target_count[0] = i->second.target_count[0];
+		bbl->target_count[1] = i->second.target_count[1];
+	}
+
+	if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
 }
 
 void print(const std::string &file_name)
