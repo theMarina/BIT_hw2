@@ -43,7 +43,6 @@ g_img_map_t g_img_map;
 
 VOID bbl_count(std::pair<bbl_key_t, bbl_val_t>* curr_bbl_ptr)
 {
-	//std:: cout << curr_bbl_ptr->first.first << std::endl;
 	curr_bbl_ptr->second.counter++;
 	if(!g_last_bbl_ptr)
 		goto out;
@@ -210,21 +209,7 @@ VOID Trace(TRACE trace, VOID *v)
 		
 	}
 }
-/*
-struct printing_edge_t {
-	bbl_val_t* edge_from;	//  using bbl_val_t* as a unique bbl identifier
-	bbl_val_t* edge_to;	//  using bbl_val_t* as a unique bbl identifier
-	unsigned long edge_count;
-};
 
-struct aaaa{
-	bool operator()(const printing_edge_t& n1, const printing_edge_t& n2) {
-		if(n1.edge_count < n2.edge_count) return true;
-		if(n1.edge_from->idx_for_printing < n2.edge_from->idx_for_printing) return true;
-		return n1.edge_to->idx_for_printing < n2.edge_to->idx_for_printing;
-	}
-}print_edges_cmp;
-*/
 struct printing_rtn_t {
 	unsigned long counter;	//counter*bbl_size
 	string rtn_name;
@@ -233,38 +218,22 @@ struct printing_rtn_t {
 	std::set<std::pair<ADDRINT, USIZE> > bbls;	// I will use the order as index. <base, size> is good for sorting
 												//  I want it to be bbl_key_t, but it is const for compilation of
 												// other stuff. BAH
-	//std::vector<printing_edge_t> printing_edges; // TODO: use this
 };
-/*
-struct aaa{
-	bool operator()(bbl_val_t* a, bbl_val_t* b) const {   
-		if(a->first_ins < b->first_ins) return true;
-		return (a->last_ins < b->last_ins);
-        }   
-} cmp_bbl_val_t_ptr;
-*/
 
 struct cmp_printing_rtn{
 	bool operator()(const printing_rtn_t& n1, const printing_rtn_t& n2) const {   
-		if (n1.counter < n2.counter)
-			return true;
 		if (n1.counter > n2.counter)
+			return true;
+		if (n1.counter < n2.counter)
 			return false;
 			
-		if (n1.rtn_name < n2.rtn_name)
-			return true;
 		if (n1.rtn_name > n2.rtn_name)
+			return true;
+		if (n1.rtn_name < n2.rtn_name)
 			return false;
-		return (n1.rtn_addr < n2.rtn_addr);
-}  
+		return (n1.rtn_addr > n2.rtn_addr);
+	}  
 };
-/*
-bool operator<(const printing_rtn_t& n1, const printing_rtn_t& n2)
-{
-	if (n1.counter < n2.counter) return true;
-	return n1.rtn_name < n2.rtn_name;
-}
-*/
 
 void print(const std::string &file_name)
 {
@@ -298,6 +267,7 @@ void print(const std::string &file_name)
 			std::dec << " : icount: " << (print_it->counter) << std::endl;
 			
 		int i = 0;
+		std::set<std::pair<unsigned long, std::pair<bbl_val_t*,bbl_val_t*> > > edges;
 		for(std::set<std::pair<ADDRINT, USIZE> >::const_iterator bbl_it = print_it->bbls.begin() ; bbl_it != print_it->bbls.end() ; ++bbl_it) {
 			bbl_key_t bbl_key = *bbl_it;
 			bbl_val_t* bbl_val = &(g_bbl_map[bbl_key]);
@@ -307,26 +277,15 @@ void print(const std::string &file_name)
 				std::dec << std::endl;
 				bbl_val->idx_for_printing = i;
 				i++;
+				for(std::map<bbl_key_t, int>::iterator edge_it = bbl_val->target_count.begin(); edge_it != bbl_val->target_count.end() ; ++edge_it) {
+					edges.insert(make_pair(edge_it->second, make_pair(bbl_val, &(g_bbl_map[edge_it->first]))));
+				}
 		}
-/*
-		std::sort(print_it->second.printing_bbl_list.begin(), print_it->second.printing_bbl_list.end(), cmp_bbl_val_t_ptr);
-		int i = 0;
-		for(std::vector<bbl_val_t*>::iterator rtn_it = print_it->second.printing_bbl_list.begin() ; rtn_it != print_it->second.printing_bbl_list.end() ; ++rtn_it) {
-			file << "\tBB" << i << std::hex <<
-				": 0x"  << (*rtn_it)->first_ins - (*rtn_it)->img_addr <<
-				" - 0x" << (*rtn_it)->last_ins  - (*rtn_it)->img_addr <<
-				std::dec << std::endl;
-			(*rtn_it)->idx_for_printing = i;
-			i++;
-		}
-
-//		std::sort(print_it->second.printing_edges.begin(), print_it->second.printing_edges.end(), print_edges_cmp);	// TODO: when I uncomment this line, I get a semnentation fault
 		i = 0;
-		for(std::vector<printing_edge_t>::iterator edge_it = print_it->second.printing_edges.begin() ; edge_it != print_it->second.printing_edges.end() ; ++edge_it) {
-			file << "\t\tEdge" << i << ": BB" << edge_it->edge_from->idx_for_printing << " --> BB" << edge_it->edge_to->idx_for_printing << "\t" << edge_it->edge_count << std::endl;
+		for(std::set<std::pair<unsigned long, std::pair<bbl_val_t*,bbl_val_t*> > >::reverse_iterator it = edges.rbegin() ; it != edges.rend() ; ++it) {
+			file << "\t\tEdge" << i << ": BB" << it->second.first->idx_for_printing << " --> BB" << it->second.second->idx_for_printing << "\t" << it->first << std::endl;
 			i++;
 		}
-	*/	
 	}
 
 }
