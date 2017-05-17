@@ -43,8 +43,13 @@ g_img_map_t g_img_map;
 
 VOID bbl_count(std::pair<bbl_key_t, bbl_val_t>* curr_bbl_ptr)
 {
+	if(curr_bbl_ptr == NULL) {
+		goto out;
+	}
 	curr_bbl_ptr->second.counter++;
 	if (!g_last_bbl_ptr)
+		goto out;
+	if(curr_bbl_ptr->second.rtn_addr != g_last_bbl_ptr->second.rtn_addr)
 		goto out;
 	if ((g_last_bbl_ptr->second.target[1] == curr_bbl_ptr->first.first)  //fall through
 	 || (g_last_bbl_ptr->second.ends_with_direct_jump    // direct branch target
@@ -193,7 +198,14 @@ VOID Trace(TRACE trace, VOID *v)
 		bbl_key_t bbl_key = make_pair(bbl_addr, bbl_size);
 
 		RTN rtn = INS_Rtn(first_ins);
-		if (!RTN_Valid(rtn)) continue;
+		if (!RTN_Valid(rtn)) {
+			BBL_InsertCall(bbl,
+			IPOINT_BEFORE,
+			(AFUNPTR)bbl_count,
+			IARG_PTR, (void*)NULL,
+			IARG_END);
+			continue;
+		}
 
 		IMG img = IMG_FindByAddress(bbl_addr);
 
