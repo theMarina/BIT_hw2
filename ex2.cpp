@@ -62,18 +62,25 @@ VOID Img(IMG img, VOID *v) // why VOID *v ?
 }
 
 #pragma pack(1)
+struct count_to_file_t
+{
+	unsigned int count;
+	ADDRINT addr;
+	USIZE size;
+};
+const unsigned int MAX_EDGES = 5;
+
 struct bbl_to_file_t
 {
 	unsigned long counter;
 	ADDRINT first_ins;
-	ADDRINT last_ins;
 	ADDRINT rtn_addr;
 	UINT32 size;
 	char img_name[255];
 	ADDRINT target[2];
-	unsigned int target_count[2];
+	count_to_file_t target_count[MAX_EDGES];
 };
-/*
+
 void update_file(const std::string &file_name)
 {
 	int fd;
@@ -97,19 +104,23 @@ void update_file(const std::string &file_name)
 
 			ADDRINT img_addr = g_img_map[bbl->img_name];
 
-			bbl_val_t &bbl_val = g_bbl_map[bbl->first_ins + img_addr];
+			bbl_val_t &bbl_val = g_bbl_map[std::make_pair(bbl->first_ins + img_addr, bbl->size)];
 
 			bbl_val.counter += bbl->counter;
-			bbl_val.size = bbl->size;
-			bbl_val.first_ins = bbl->first_ins + img_addr;
-			bbl_val.last_ins = bbl->last_ins + img_addr;
 			bbl_val.rtn_addr = bbl->rtn_addr + img_addr;
 			bbl_val.img_name = std::string(bbl->img_name);
 			bbl_val.img_addr = img_addr;
 			bbl_val.target[0] = bbl->target[0] + img_addr;
 			bbl_val.target[1] = bbl->target[1] + img_addr;
-			bbl_val.target_count[0] += bbl->target_count[0];
-			bbl_val.target_count[1] += bbl->target_count[1];
+
+			for (unsigned int j = 0; j < MAX_EDGES; ++j) {
+				ADDRINT bbl_addr = bbl->target_count[j].addr;
+				USIZE bbl_size = bbl->target_count[j].size;
+				unsigned int count = bbl->target_count[j].count;
+
+				if (count)
+					bbl_val.target_count[make_pair(bbl_addr, bbl_size)] += count;
+			}
 
 			RTN rtn = RTN_FindByAddress(bbl_val.rtn_addr);
 			if (RTN_Valid(rtn)) bbl_val.rtn_name = std::string(RTN_Name(rtn));
@@ -141,22 +152,34 @@ void update_file(const std::string &file_name)
 		bbl_to_file_t *bbl = (bbl_to_file_t*)p;
 		p += sizeof (*bbl);
 
+		bbl->first_ins = i->first.first - i->second.img_addr;
+		bbl->size = i->first.second;
+
 		bbl->counter = i->second.counter;
-		bbl->first_ins = i->second.first_ins - i->second.img_addr;
-		bbl->last_ins = i->second.last_ins - i->second.img_addr;
 		bbl->rtn_addr = i->second.rtn_addr - i->second.img_addr;
-		bbl->size = i->second.size;
 		strcpy(bbl->img_name, i->second.img_name.c_str());
 		bbl->target[0] = i->second.target[0] - i->second.img_addr;
 		bbl->target[1] = i->second.target[1] - i->second.img_addr;
-		bbl->target_count[0] = i->second.target_count[0];
-		bbl->target_count[1] = i->second.target_count[1];
+
+		unsigned int n = 0;
+		for (std::map<bbl_key_t, int>::const_iterator j = i->second.target_count.begin();
+				j != i->second.target_count.end() && n < MAX_EDGES;
+				++j, ++n) {
+			bbl->target_count[n].addr  = j->first.first;
+			bbl->target_count[n].size  = j->first.second;
+			bbl->target_count[n].count = j->second;
+		}
+
+		for (;n < MAX_EDGES; ++n)
+		{
+			bbl->target_count[n].addr  =
+			bbl->target_count[n].size  =
+			bbl->target_count[n].count = 0;
+		}
 	}
 
 	if (close(fd) < 0) {std::cerr << "Error" << std::endl; return;}
 }
-*/
-
 
 VOID Trace(TRACE trace, VOID *v)
 {
@@ -291,7 +314,7 @@ void print(const std::string &file_name)
 
 VOID Fini(INT32 code, VOID *v)
 {
-//	update_file("__profile.map");
+	update_file("__profile.map");
 	print("rtn-output.txt");
 }
 
