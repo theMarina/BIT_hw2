@@ -44,16 +44,12 @@ g_img_map_t g_img_map;
 VOID bbl_count(std::pair<bbl_key_t, bbl_val_t>* curr_bbl_ptr)
 {
 	curr_bbl_ptr->second.counter++;
-	if(!g_last_bbl_ptr)
+	if (!g_last_bbl_ptr)
 		goto out;
-	if(g_last_bbl_ptr->second.target[1] == curr_bbl_ptr->first.first  //fall through
-			|| (g_last_bbl_ptr->second.ends_with_direct_jump    // direct branch target
-			 && ((g_last_bbl_ptr->second.target[0]) == (curr_bbl_ptr->first.first)))){	// direct branch target
-		if(g_last_bbl_ptr->second.target_count.find(curr_bbl_ptr->first) == g_last_bbl_ptr->second.target_count.end()) {
-			g_last_bbl_ptr->second.target_count[curr_bbl_ptr->first] = 1;
-		} else {
-			g_last_bbl_ptr->second.target_count[curr_bbl_ptr->first] ++;
-		}
+	if ((g_last_bbl_ptr->second.target[1] == curr_bbl_ptr->first.first)  //fall through
+	 || (g_last_bbl_ptr->second.ends_with_direct_jump    // direct branch target
+	     && g_last_bbl_ptr->second.target[0] == curr_bbl_ptr->first.first)) {	// direct branch target
+		g_last_bbl_ptr->second.target_count[curr_bbl_ptr->first]++;
 	}
 out:
 	g_last_bbl_ptr = curr_bbl_ptr;
@@ -166,12 +162,12 @@ VOID Trace(TRACE trace, VOID *v)
 {
 	for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl))
 	{
-		ADDRINT bbl_addr = BBL_Address(bbl);
-		USIZE bbl_size = BBL_Size(bbl);
-		bbl_key_t bbl_key = make_pair(bbl_addr, bbl_size);
-
 		INS first_ins = BBL_InsHead(bbl);
 		INS last_ins = BBL_InsTail(bbl);
+
+		ADDRINT bbl_addr = BBL_Address(bbl);
+		USIZE bbl_size = BBL_Size(bbl) - INS_Size(last_ins);
+		bbl_key_t bbl_key = make_pair(bbl_addr, bbl_size);
 
 		RTN rtn = INS_Rtn(first_ins);
 		if (!RTN_Valid(rtn)) continue;
@@ -188,10 +184,12 @@ VOID Trace(TRACE trace, VOID *v)
 			bbl_val.rtn_addr = RTN_Address(rtn);
 			bbl_val.img_name = IMG_Name(img);
 			bbl_val.img_addr = IMG_LowAddress(img);
-			bbl_val.target[0] = 0;
+			bbl_val.target[0] = bbl_val.target[1] = 0;
 			if(INS_IsDirectBranchOrCall(last_ins))
 				bbl_val.target[0] = INS_DirectBranchOrCallTargetAddress(last_ins);
-			bbl_val.target[1] = bbl_addr + bbl_size;
+
+			if (INS_HasFallThrough(last_ins))
+				bbl_val.target[1] = INS_NextAddress(last_ins);
 
 			it = g_bbl_map.insert(g_bbl_map.begin(), make_pair(bbl_key, bbl_val));
 		}
@@ -205,7 +203,8 @@ VOID Trace(TRACE trace, VOID *v)
 			IARG_END);
 
 		//std::cout << std::hex << bbl_val_ptr->first_ins << std::dec << ": " << bbl_val_ptr->size << std::endl;
-		//std::cout << std::hex << bbl_val_ptr->last_ins << std::dec << ": " << INS_Disassemble(last_ins) << std::endl;
+		//std::cout << std::hex << INS_Address(first_ins) << std::dec << ": " << INS_Disassemble(first_ins) << std::endl;
+		//std::cout << std::hex << INS_Address(last_ins) << std::dec << ": " << INS_Disassemble(last_ins) << std::endl;
 		
 	}
 }
