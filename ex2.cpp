@@ -46,6 +46,8 @@ VOID bbl_count(std::pair<bbl_key_t, bbl_val_t>* curr_bbl_ptr)
 	curr_bbl_ptr->second.counter++;
 	if (!g_last_bbl_ptr)
 		goto out;
+	if(curr_bbl_ptr->second.rtn_addr != g_last_bbl_ptr->second.rtn_addr)
+		goto out;
 	if ((g_last_bbl_ptr->second.target[1] == curr_bbl_ptr->first.first)  //fall through
 	 || (g_last_bbl_ptr->second.ends_with_direct_jump    // direct branch target
 	     && g_last_bbl_ptr->second.target[0] == curr_bbl_ptr->first.first)) {	// direct branch target
